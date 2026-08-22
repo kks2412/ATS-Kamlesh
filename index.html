@@ -4,14 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ATS Match Studio</title>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<meta name="theme-color" content="#1B2130">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="ATS Studio">
-<meta name="description" content="Score your CV against a job description and optimize it to a properly formatted, ATS-ready PDF.">
 <style>
 :root{
   --ink:#1B2130;
@@ -976,7 +968,14 @@ async function callClaude(system, user, maxTokens){
       throw new Error(lastErr.message + ' Please wait a moment and click the button again.');
     }
 
-    if(!response.ok){ throw new Error('Request failed with status ' + response.status); }
+    if(!response.ok){
+      let detail = '';
+      try{
+        const errBody = await response.json();
+        detail = errBody && errBody.error && errBody.error.message ? errBody.error.message : '';
+      }catch(e){ /* body wasn't JSON, ignore */ }
+      throw new Error('Request failed with status ' + response.status + (detail ? ': ' + detail : ''));
+    }
     const data = await response.json();
     const textBlock = (data.content || []).find(b => b.type === 'text');
     if(!textBlock){ throw new Error('No text in response.'); }
@@ -1051,7 +1050,7 @@ Keep every string short. Output nothing but the JSON object.`;
       ? `JOB DESCRIPTION:\n${jd}\n\n---\n\nCANDIDATE'S CV:\n${cv}`
       : `CANDIDATE'S CV:\n${cv}`;
 
-    const analysisResp = await callClaude(analysisSystem, analysisUser, 900);
+    const analysisResp = await callClaude(analysisSystem, analysisUser, 2500);
     let analysis;
     try{
       analysis = extractJson(analysisResp.text);
@@ -1128,7 +1127,7 @@ No commentary, no markdown fences — just the JSON array.`;
   const user = `ORIGINAL CV:\n${originalCv}\n\n---\n\nDRAFT CV:\n${draftText}`;
 
   try{
-    const resp = await callClaude(system, user, 500);
+    const resp = await callClaude(system, user, 1500);
     let raw = resp.text.trim().replace(/^```json\s*|^```\s*|```\s*$/g, '').trim();
     const start = raw.indexOf('[');
     const end = raw.lastIndexOf(']');
@@ -1166,7 +1165,7 @@ Output ONLY the finished CV as plain text, no commentary, no markdown fences, no
       ? `JOB DESCRIPTION:\n${lastJdText}\n\n---\n\nCANDIDATE'S CURRENT CV (edit this, don't replace it):\n${lastCvText}`
       : `CANDIDATE'S CURRENT CV (edit this, don't replace it):\n${lastCvText}`;
 
-    const resp = await callClaude(resumeSystem, userMsg, 6000);
+    const resp = await callClaude(resumeSystem, userMsg, 8000);
     let resumeText = resp.text.replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
     const wasTruncated = resp.stopReason === 'max_tokens';
 
@@ -1539,12 +1538,6 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
 
 runBtn.addEventListener('click', runScan);
 optimizeBtn.addEventListener('click', runOptimize);
-
-if('serviceWorker' in navigator){
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js').catch(err => console.warn('Service worker registration failed:', err));
-  });
-}
 </script>
 </body>
 </html>
